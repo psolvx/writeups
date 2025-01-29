@@ -6,12 +6,12 @@ sort LastWriteTime -descending|`
 select -first 50
 ```
 
-![[../attachments/Screenshot-from-2025-01-27-11-14-32.png](../attachments/Screenshot-from-2025-01-27-11-14-32.png)
+![[../attachments/Screenshot-from-2025-01-27-11-14-32.png](../attachments/Screenshot-from-2025-01-27-11-14-32.png)]
 
 Looking at the crashdump in GDB we see that it crashed in liblzma while trying to resolve RSA_public_decrypt.!
-![[../attachments/Pasted-image-20250127112113.png](../attachments/Pasted-image-20250127112113.png)
+![[../attachments/Pasted-image-20250127112113.png](../attachments/Pasted-image-20250127112113.png)]
 Liblzma is not mapped in the crashdump, but we can get it from the system archive and rebase it to the same address.
-![[../attachments/Pasted-image-20250127112233.png](../attachments/Pasted-image-20250127112233.png)
+![[../attachments/Pasted-image-20250127112233.png](../attachments/Pasted-image-20250127112233.png)]
 The function looks like a hook on RSA_public_decrypt, it takes the same parameters, runs some code and tries to return to the original function. This is similar to the backdoor in xz  
 (https://www.openwall.com/lists/oss-security/2024/03/29/4).
 
@@ -22,22 +22,22 @@ int RSA_public_decrypt(int flen, unsigned char *from,
 _RSA_public_decrypt()_ recovers the message digest from the **flen** bytes long signature at **from** using the signer's public key **rsa**.
 ```
 In the challenge the backdoor is activated when the function receives as a parameter a signature starting with `48 7a 40 c5`. It then reads a key and nonce from the signature and decrypts a shellcode using standard ChaCha20.
-![[../attachments/Pasted-image-20250127113529.png](../attachments/Pasted-image-20250127113529.png)
+![[../attachments/Pasted-image-20250127113529.png](../attachments/Pasted-image-20250127113529.png)]
 The signature containing the key and nonce can be found in the crashdump.
-![[../attachments/Pasted-image-20250127123731.png](../attachments/Pasted-image-20250127123731.png)
+![[../attachments/Pasted-image-20250127123731.png](../attachments/Pasted-image-20250127123731.png)]
 The decrypted shellcode connects to a socket using a hardcoded ip and port number. It receives a key, nonce, length of a filename and a filename. It then reads from the given file, encrypts the data using ChaCha20 and sends it to the socket.
-![[../attachments/Pasted-image-20250127114343.png](../attachments/Pasted-image-20250127114343.png)
-![[../attachments/Pasted-image-20250127124033.png](../attachments/Pasted-image-20250127124033.png)
+![[../attachments/Pasted-image-20250127114343.png](../attachments/Pasted-image-20250127114343.png)]
+![[../attachments/Pasted-image-20250127124033.png](../attachments/Pasted-image-20250127124033.png)]
 Searching the stack area in the crashdump we find what could potentially be the filename. From the disassembly we know that the key and nonce are placed above the filename on  the stack and the encrypted data starts 0x100 bytes below the start of the filename.
 ![[Pasted-image-20250127115605.png](Pasted-image-20250127115605.png)
 The ChaCha20 implementation looks very similar to an opensource one from github (https://github.com/Ginurx/chacha20-c) but trying the decryption with the recovered data doesn't work.
-![[../attachments/Pasted-image-20250127114553.png](../attachments/Pasted-image-20250127114553.png)
+![[../attachments/Pasted-image-20250127114553.png](../attachments/Pasted-image-20250127114553.png)]
 
-![[../attachments/Pasted-image-20250127114608.png](../attachments/Pasted-image-20250127114608.png)
+![[../attachments/Pasted-image-20250127114608.png](../attachments/Pasted-image-20250127114608.png)]
 
-![[../attachments/Pasted-image-20250127114626.png](../attachments/Pasted-image-20250127114626.png)
-![[../attachments/Pasted-image-20250127114713.png](../attachments/Pasted-image-20250127114713.png)
-![[../attachments/Pasted-image-20250127114746.png](../attachments/Pasted-image-20250127114746.png)
+![[../attachments/Pasted-image-20250127114626.png](../attachments/Pasted-image-20250127114626.png)]
+![[../attachments/Pasted-image-20250127114713.png](../attachments/Pasted-image-20250127114713.png)]
+![[../attachments/Pasted-image-20250127114746.png](../attachments/Pasted-image-20250127114746.png)]
 I didn't know what I was missing in the decryption, so I decided to emulate the whole shellcode instead.
 ```
 from unicorn import *
