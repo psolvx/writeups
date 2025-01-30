@@ -2,16 +2,19 @@ The challenge consists of an encrypted file `flag.txt.enc` and a 64 bit Windows 
 
 The program first generates a part of the seed from system time.
 ![../attachments/Pasted-image-20250127135133.png](/attachments/Pasted-image-20250127135133.png)
+
 Second part of the seed is generated from transformed characters of the filename. Both parts are then xor'ed and used to generate a 32 bytes long key and a 16 bytes long iv.
 ![../attachments/Pasted-image-20250127135321.png](/attachments/Pasted-image-20250127135321.png)
+
 The prng function uses a lot of combined operations in a loop and is probably impossible to reverse.
 ![../attachments/Pasted-image-20250127140309.png](/attachments/Pasted-image-20250127140309.png)
+
 In the aes key setup only 16 bytes of the generated key are used.
 ![../attachments/Pasted-image-20250127135920.png](/attachments/Pasted-image-20250127135920.png)
 
 Each byte of the seed is transformed with some arithmetic operations into a 4 byte value. It is then saved to the output file followed by the next 16 bytes of the encrypted data. 
-
 ![../attachments/Pasted-image-20250127135507.png](/attachments/Pasted-image-20250127135507.png)
+
 The arithmetic operations used to obfuscate the seed are not as complex as a prng and can be reversed. I wrote a python script to recover the seed from the encrypted file.
 ```
 def parse_file(filename):
@@ -51,7 +54,7 @@ The recovered seed is `55 75 52 12`.
 
 To get the key and iv used for aes decryption the value of the seed can be patched in the r15 register before calls to the prng function. The calls will then return the correct key and iv.
 
-![../attachments/Pasted-image-20250127135054.png](/attachments/Pasted-image-20250127135054.png)]
+![../attachments/Pasted-image-20250127135054.png](/attachments/Pasted-image-20250127135054.png)
 
 The recovered key and iv can then be used to decrypt the message extracted from the encrypted file.
 
