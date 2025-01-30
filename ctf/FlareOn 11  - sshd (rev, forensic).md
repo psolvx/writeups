@@ -9,9 +9,11 @@ select -first 50
 ![../attachments/Screenshot-from-2025-01-27-11-14-32.png](/attachments/Screenshot-from-2025-01-27-11-14-32.png)
 
 Looking at the crashdump in GDB we see that it crashed in liblzma while trying to resolve RSA_public_decrypt.
+
 ![../attachments/Pasted-image-20250127112113.png](/attachments/Pasted-image-20250127112113.png)
 
 Liblzma is not mapped in the crashdump, but we can get it from the system archive and rebase it to the same address.
+
 ![../attachments/Pasted-image-20250127112233.png](/attachments/Pasted-image-20250127112233.png)
 
 The function looks like a hook on RSA_public_decrypt, it takes the same parameters, runs some code and tries to return to the original function. This is similar to the backdoor in xz  
@@ -28,27 +30,40 @@ In the challenge the backdoor is activated when the function receives as a param
 ![../attachments/Pasted-image-20250127113529.png](/attachments/Pasted-image-20250127113529.png)
 
 The signature containing the key and nonce can be found in the crashdump.
+
 ![../attachments/Pasted-image-20250127123731.png](/attachments/Pasted-image-20250127123731.png)
 
 The decrypted shellcode connects to a socket using a hardcoded ip and port number. It receives a key, nonce, length of a filename and a filename. It then reads from the given file, encrypts the data using ChaCha20 and sends it to the socket.
+
 ![../attachments/Pasted-image-20250127114343.png](/attachments/Pasted-image-20250127114343.png)
 ![../attachments/Pasted-image-20250127124033.png](/attachments/Pasted-image-20250127124033.png)
 
 Searching the stack area in the crashdump we find what could potentially be the filename. From the disassembly we know that the key and nonce are placed above the filename on  the stack and the encrypted data starts 0x100 bytes below the start of the filename.
+
 ![Pasted-image-20250127115605.png](/attachments/Pasted-image-20250127115605.png)
 
 The ChaCha20 implementation looks very similar to an opensource one from github (https://github.com/Ginurx/chacha20-c) but trying the decryption with the recovered data doesn't work. Here are the details of the implementation:
+
 ![../attachments/Pasted-image-20250127114553.png](/attachments/Pasted-image-20250127114553.png)
 ![../attachments/Pasted-image-20250127114608.png](/attachments/Pasted-image-20250127114608.png)
 ![../attachments/Pasted-image-20250127114626.png](/attachments/Pasted-image-20250127114626.png)
 ![../attachments/Pasted-image-20250127114713.png](/attachments/Pasted-image-20250127114713.png)
 ![../attachments/Pasted-image-20250127114746.png](/attachments/Pasted-image-20250127114746.png)
 
-I didn't know what I was missing in the decryption, so I decided to emulate the whole shellcode instead.
+I didn't know what I was missing in the decryption, so I decided to emulate the whole shellcode instead. Later from other writeups i found out that one of the initial constant bytes was changed. Here is the python script i wrote using unicorn engine:
+
 ```
 from unicorn import *
 from unicorn.x86_const import *
 
+shellcode_file = 'shellcode.bin'
+
+f = open(shellcode_file, 'rb')
+try:
+    code = f.read()
+finally:
+    f.close()
+    
 key = bytes.fromhex('8dec9112eb760eda7c7d87a443271c35d9e0cb878993b4d904aef934fa2166d7')
 nonce = bytes.fromhex('111111111111111111111111')
 data = bytes.fromhex('a9f63408422a9e1c0c03a8089470bb8daadc6d7b24ff7f247cda839e92f7071d0263902ec1580000')
@@ -125,7 +140,9 @@ decr = uc.mem_read(stack_base+0x3000, 0x28)
 print(f"decrypted data: {decr.hex()}")
 
 ```
+
 While emulating the shellcode with unicorn, the keystream generation part worked correctly but the decryption didn't. Fortunately, the keystream is enough to decrypt the data with just a manual xor.
+
 ```
 python3 emulate.py
 ctx: 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
