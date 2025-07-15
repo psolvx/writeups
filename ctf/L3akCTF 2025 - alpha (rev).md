@@ -199,7 +199,7 @@ executor.callback_manager.register_post_addr_callback(0x134e, hook_transform_mai
 executor.callback_manager.register_post_addr_callback(0x134f, hook_transform_main)
 ```
 
-This time the trace finishes and we see the `Incorrect!` message getting. It got printed by a call to puts (TritonDSE implements some of the common linux apis). We can confirm that by looking at RVA 0x10a0 in binary ninja which is in the .plt.sec section and matches our disassembly.
+This time the trace finishes and we see the `Incorrect!` message. It got printed by a call to puts (TritonDSE implements some of the common linux apis). We can confirm that by looking at RVA 0x10a0 in binary ninja which is in the .plt.sec section and matches our disassembly.
 
 ```
 [+] hooked main transform
