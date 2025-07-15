@@ -5,7 +5,7 @@ This was a fun reverse engineering challenge from 2025 L3akCTF. I got the 11th s
 
 This challenge also gave me a nice opportunity to practice symbolic execution using triton which is I think more fun than asking an LLM to translate decompilation into z3 constraints. 
 
-![](attachments/Pasted%20image%2020250715120925.png)
+![../attachments/Pasted%20image%2020250715120925.png](attachments/Pasted%20image%2020250715120925.png)
 
 # Analysis
 
@@ -18,29 +18,29 @@ chal: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linke
 
 Opening the program in binary ninja we see that it calls `printf` and `fgets` followed by an instruction that was not disassembled properly - most likely an illegal instruction.
 
-![](attachments/Pasted%20image%2020250715121514.png)
+![../attachments/Pasted%20image%2020250715121514.png](attachments/Pasted%20image%2020250715121514.png)
 
 Following the `data_404010` reference which is the argument to `printf` we see that it asks for a flag. The other two strings being `Correct!` and `Incorrect!` indicate that this is a flag-checker challenge.
 
-![](attachments/Pasted%20image%2020250715121538.png)
+![../attachments/Pasted%20image%2020250715121538.png](attachments/Pasted%20image%2020250715121538.png)
 
 Knowing that there is an illegal instruction i start looking for registered signal handler. In this case it has to be before main function so probably inside one of the `INIT` functions.
 
 The function `_INIT_1` is seen registering a signal handler `sub_4011e9` using the `sigaction` syscall. The argument `signum = 4` corresponds to `SIGILL` (illegal instruction) which is what we are looking for.
 
-![](attachments/Pasted%20image%2020250715121608.png)
+![../attachments/Pasted%20image%2020250715121608.png](attachments/Pasted%20image%2020250715121608.png)
 
 The handler is fairly simple. It transforms the first 0x40 bytes of main by xoring them with a key stored in the data section. Each time the handler is called, the next part of the key is used. The key in .rodata section is 0x974 bytes long, indicating that the handler will be called multiple times.
 
 It also sets the last byte to 0x37 which is the same value that caused the illegal instruction in the first place and returns the address of this byte.
 
-![](attachments/Pasted%20image%2020250715121651.png)
+![../attachments/Pasted%20image%2020250715121651.png](attachments/Pasted%20image%2020250715121651.png)
 
 We can even improve the decompilation a bit by adding the type definition for `ucontext_t`.
 
 As can be confirmed in `/usr/include/sys/ucontext.h`, position 0x11 in the general registers array corresponds to the instruction pointer. This makes it so that after the handler finishes, execution is transferred to the start of the modified main function.
 
-![](attachments/Pasted%20image%2020250715140013.png)
+![../attachments/Pasted%20image%2020250715140013.png](attachments/Pasted%20image%2020250715140013.png)
 
 The other functions in the program appear to be obfuscated math operations but they have no cross references. They will possibly be called by the modified main code.
 
@@ -222,7 +222,7 @@ Incorrect!
 INFO:tritondse.executor:hit 0x1125: hlt instruction stop.
 ```
 
-![](attachments/Pasted%20image%2020250715144631.png)
+![../attachments/Pasted%20image%2020250715144631.png](attachments/Pasted%20image%2020250715144631.png)
 
 To see both branches of the if statement i used binary-refinery asm unit to quickly disassemble the last patch to the main function. In the disassembly below we can see that both branches lead to a call to the same function (puts) with different arguments `[rip + 0x2cfb]` and `[rip + 0x2cf2]` which correspond to the addresses of `Correct` and `Incorrect` strings in the data section.
 
@@ -285,7 +285,7 @@ Unfortunately running this code results in UNSAT.
 [+] status 0
 ```
 
-![](attachments/Pasted%20image%2020250715131211.png)
+![../attachments/Pasted%20image%2020250715131211.png](attachments/Pasted%20image%2020250715131211.png)
 
 To debug why we are failing we can try to print the path constraints for the process state at the final hook.
 
@@ -306,7 +306,7 @@ This results in 135 constraints like the ones below, all referencing the same ad
 
 The addresses correspond to the function below. Here the variable `i` which is the loop counter that seems to be causing problems depends on the argument to the function.
 
-![](attachments/Pasted%20image%2020250715125956.png)
+![../attachments/Pasted%20image%2020250715125956.png](attachments/Pasted%20image%2020250715125956.png)
 
 To get a better trace i update the trace hook to show the arguments of all the obfuscated math functions when they are called but not to show the trace inside them because it was to long to read the disassembly loops.
 
